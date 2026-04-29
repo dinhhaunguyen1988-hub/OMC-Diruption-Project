@@ -20,8 +20,7 @@ import {
 import { OptionRow } from "@/components/simulate/option-row";
 import { OptionDetail } from "@/components/simulate/option-detail";
 import { ImpactedFlightsPanel } from "@/components/simulate/impacted-flights-panel";
-
-type ScenarioKey = "aog" | "airport_close" | "weather" | "late_arrival";
+import { buildCompareUrl, type ScenarioKey } from "@/lib/compare-url";
 
 export default function SimulatePage() {
   const { schedule, aircraft, disruption, rules, loadSampleData, session } =
@@ -133,13 +132,27 @@ export default function SimulatePage() {
 
   const openCompare = () => {
     if (compareIds.size !== 2 || !result) return;
-    const ids = Array.from(compareIds);
+    const picks: number[] = [];
+    result.ranked_options.forEach((o, idx) => {
+      if (compareIds.has(o.option_id)) picks.push(idx);
+    });
+    if (picks.length !== 2) return;
+
+    // Keep sessionStorage as a same-session cache (faster page open, also
+    // a fallback if the URL state misses anything). The URL is the
+    // canonical source of truth on reload.
     const payload = {
       saved_at: new Date().toISOString(),
-      options: result.ranked_options.filter((o) => ids.includes(o.option_id)),
+      options: result.ranked_options.filter((o) => compareIds.has(o.option_id)),
     };
     sessionStorage.setItem("occ:compare", JSON.stringify(payload));
-    window.location.href = "/dashboard/compare";
+
+    const url = buildCompareUrl({
+      scenario,
+      picks,
+      extraEvents,
+    });
+    window.location.href = url;
   };
 
   const handleLoadScenario = async (s: ScenarioKey) => {

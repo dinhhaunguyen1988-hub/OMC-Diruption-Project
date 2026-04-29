@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useData } from "@/components/data-context";
+import { runMultiEventSimulation, runSimulation } from "@/lib/engine";
+import { parseCompareUrl } from "@/lib/compare-url";
 import type { RecoveryOption } from "@/lib/types";
 import { cn, formatDateTime } from "@/lib/utils";
 
@@ -10,17 +13,40 @@ interface ComparePayload {
   options: RecoveryOption[];
 }
 
-export default function ComparePage() {
-  const [payload, setPayload] = useState<ComparePayload | null>(null);
-  const [missing, setMissing] = useState(false);
+type ResolveResult =
+  | { kind: "loading" }
+  | { kind: "missing" }
+  | { kind: "error"; message: string }
+  | { kind: "ok"; payload: ComparePayload };
 
+export default function ComparePage() {
+  const { schedule, aircraft, disruption, rules, loadSampleData } = useData();
+  const [sessionPayload, setSessionPayload] = useState<ComparePayload | null>(
+    null,
+  );
+  const [sessionChecked, setSessionChecked] = useState(false);
+
+  // Parse URL once per mount; query string drives the compare state.
+  const urlState = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    return parseCompareUrl(window.location.search.replace(/^\?/, ""));
+  }, []);
+
+  // Path A — URL has scenario+picks: load the sample for that scenario.
+  // The actual option resolution happens synchronously in the derived
+  // memo below once DataContext catches up.
   useEffect(() => {
-    let cancelled = false;
+    if (!urlState) return;
+    void loadSampleData(urlState.scenario);
+  }, [urlState, loadSampleData]);
+
+  // Path B — no URL params: read session-storage handoff (legacy / cache).
+  useEffect(() => {
+    if (urlState) return;
     Promise.resolve().then(() => {
-      if (cancelled) return;
       const raw = sessionStorage.getItem("occ:compare");
       if (!raw) {
-        setMissing(true);
+        setSessionChecked(true);
         return;
       }
       try {
@@ -35,17 +61,84 @@ export default function ComparePage() {
             new_sta: new Date(c.new_sta),
           })),
         }));
-        setPayload(parsed);
+        setSessionPayload(parsed);
       } catch {
-        setMissing(true);
+        // fall through to "missing" state
+      } finally {
+        setSessionChecked(true);
       }
     });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  }, [urlState]);
 
-  if (missing) {
+  // Derived state — both paths funnel through this single computation so
+  // we never call setState synchronously inside an effect.
+  const resolved = useMemo<ResolveResult>(() => {
+    if (urlState) {
+      if (!disruption || schedule.length === 0 || aircraft.length === 0) {
+        return { kind: "loading" };
+      }
+      try {
+        const events = [disruption, ...urlState.extraEvents];
+        const ranked =
+          events.length === 1
+            ? runSimulation({ schedule, aircraft, disruption, rules })
+                .ranked_options
+            : runMultiEventSimulation({
+                schedule,
+                aircraft,
+                disruptions: events,
+                rules,
+              }).ranked_options;
+        const picks = urlState.picks
+          .map((idx) => ranked[idx])
+          .filter((o): o is RecoveryOption => Boolean(o));
+        if (picks.length < 2) {
+          return {
+            kind: "error",
+            message: `Could not resolve compare picks (requested ranks ${urlState.picks
+              .map((p) => `#${p + 1}`)
+              .join(", ")} but engine returned ${ranked.length} options).`,
+          };
+        }
+        return {
+          kind: "ok",
+          payload: { saved_at: new Date().toISOString(), options: picks },
+        };
+      } catch (e) {
+        return { kind: "error", message: (e as Error).message };
+      }
+    }
+
+    // No URL state — wait for sessionStorage scan.
+    if (!sessionChecked) return { kind: "loading" };
+    if (!sessionPayload) return { kind: "missing" };
+    return { kind: "ok", payload: sessionPayload };
+  }, [
+    urlState,
+    schedule,
+    aircraft,
+    disruption,
+    rules,
+    sessionChecked,
+    sessionPayload,
+  ]);
+
+  if (resolved.kind === "error") {
+    return (
+      <div className="space-y-3">
+        <h1 className="text-2xl font-semibold">Compare options</h1>
+        <p className="text-sm text-red-700">Error: {resolved.message}</p>
+        <Link
+          href="/dashboard/simulate"
+          className="text-sm text-primary underline underline-offset-2"
+        >
+          ← Back to Simulate
+        </Link>
+      </div>
+    );
+  }
+
+  if (resolved.kind === "missing") {
     return (
       <div className="space-y-3">
         <h1 className="text-2xl font-semibold">Compare options</h1>
@@ -63,10 +156,11 @@ export default function ComparePage() {
     );
   }
 
-  if (!payload) {
+  if (resolved.kind === "loading") {
     return <div className="text-sm text-zinc-500">Loading…</div>;
   }
 
+  const payload = resolved.payload;
   const [a, b] = payload.options;
   const winner = pickWinner(a, b);
 

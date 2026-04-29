@@ -37,4 +37,35 @@ test("UAT S3 — selects 2 ranked options, opens compare page, sees Δ table", a
   await expect(
     page.getByRole("heading", { name: /Compare 2 recovery options/i }),
   ).toBeVisible();
+
+  // Sprint 10 P1 — compare URL is now persistent: ?scenario=…&picks=…
+  await expect(page).toHaveURL(/scenario=aog/);
+  await expect(page).toHaveURL(/picks=/);
+});
+
+test("UAT S3 follow-up — compare URL survives a full page reload", async ({
+  page,
+}) => {
+  await page.goto("/dashboard/simulate");
+  await page.getByRole("button", { name: /Run simulation$/ }).click();
+  await expect(
+    page.getByRole("heading", { name: /Ranked recovery options/i }),
+  ).toBeVisible();
+
+  const checkboxes = page.getByRole("checkbox", { name: /Add to compare/i });
+  await checkboxes.nth(0).check();
+  await checkboxes.nth(1).check();
+  await page.getByRole("button", { name: /Open compare/i }).click();
+  await expect(
+    page.getByRole("heading", { name: /Compare 2 recovery options/i }),
+  ).toBeVisible();
+
+  // Wipe sessionStorage to prove we're loading from URL params alone, then
+  // reload. The compare page must regenerate options from the URL state.
+  await page.evaluate(() => sessionStorage.clear());
+  await page.reload();
+
+  await expect(
+    page.getByRole("heading", { name: /Compare 2 recovery options/i }),
+  ).toBeVisible({ timeout: 10_000 });
 });

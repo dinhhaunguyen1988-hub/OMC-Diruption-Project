@@ -9,6 +9,7 @@ import type {
   RecoveryOption,
 } from "@/lib/types";
 import { findCandidateAircraft } from "./candidate-finder";
+import { simulateCancelOrFerry } from "./cancel-or-ferry";
 import {
   simulateDeepDelay,
   simulateDelayOnly,
@@ -201,6 +202,18 @@ export function generateRecoveryOptions(
   for (const chain of chains) {
     options.push(createSwapChainOption(target, chain, schedule));
   }
+
+  // Sprint 10 P1: CANCEL_OR_FERRY — always-feasible last-resort baseline.
+  // Heavy `cancellation_penalty` (200/flight by default) ensures it ranks
+  // worst whenever any delay/swap/chain option is feasible.
+  const cancelOption = simulateCancelOrFerry(
+    impacted,
+    disruption,
+    schedule,
+    aircraftList,
+    rules,
+  );
+  if (cancelOption) options.push(cancelOption);
 
   return options;
 }

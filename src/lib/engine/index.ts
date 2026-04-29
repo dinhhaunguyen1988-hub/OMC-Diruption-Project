@@ -158,6 +158,7 @@ export {
 } from "./delay-simulator";
 export { generateRecoveryOptions } from "./recovery-option-generator";
 export { findSwapChains, type SwapChain } from "./swap-chain-finder";
+export { simulateCancelOrFerry } from "./cancel-or-ferry";
 export { rankRecoveryOptions, calculateRecoveryScore } from "./option-scorer";
 export {
   isInCurfew,

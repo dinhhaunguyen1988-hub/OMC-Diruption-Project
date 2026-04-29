@@ -79,6 +79,14 @@ export interface FlightChange {
   new_sta: Date;
   delay_minutes: number;
   reason: string;
+  /**
+   * Sprint 10 P1: CANCEL_OR_FERRY support.
+   *  - "CANCELLED": flight is dropped (no recovery, accept revenue loss).
+   *  - "FERRY": empty positioning leg flown to re-position the aircraft
+   *    so a later flight in its rotation can still operate.
+   * Absent on every other option type (delay / swap / chain).
+   */
+  status?: "CANCELLED" | "FERRY";
 }
 
 export interface RecoveryOption {
@@ -143,5 +151,10 @@ export interface OccRules {
     closure_violation_penalty: number;
     curfew_risk_penalty: number;
     priority_protection_bonus: number;
+    /**
+     * Per-cancellation penalty applied to CANCEL_OR_FERRY options.
+     * Defaults to 200 in the scorer when unset.
+     */
+    cancellation_penalty?: number;
   };
 }

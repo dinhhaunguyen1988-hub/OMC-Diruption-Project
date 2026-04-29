@@ -33,6 +33,7 @@ export function calculateRecoveryScore(
   const impactedWeight = w.impacted_flight_weight ?? 10;
   const swapPenalty = w.swap_penalty ?? 25;
   const curfewWeight = w.curfew_risk_penalty ?? 120;
+  const cancellationPenalty = w.cancellation_penalty ?? 200;
 
   const curfewViolations = countCurfewViolations(option, rules);
   option.curfew_violations = curfewViolations;
@@ -45,12 +46,20 @@ export function calculateRecoveryScore(
     }
   }
 
+  // Sprint 10 P1: count cancelled flights for CANCEL_OR_FERRY scoring.
+  // Other option types never set `status="CANCELLED"`, so this naturally
+  // contributes 0 to their score.
+  const cancelledCount = option.flight_changes.filter(
+    (c) => c.status === "CANCELLED",
+  ).length;
+
   let baseScore =
     option.total_delay_minutes * totalDelayWeight +
     option.max_delay_minutes * maxDelayWeight +
     option.impacted_flight_count * impactedWeight +
     option.swap_count * swapPenalty +
-    curfewViolations * curfewWeight;
+    curfewViolations * curfewWeight +
+    cancelledCount * cancellationPenalty;
 
   let riskPenalty = 0;
   if (option.risk_level === "MEDIUM") riskPenalty = 30;
@@ -65,6 +74,7 @@ export function calculateRecoveryScore(
     impacted_flight_component: option.impacted_flight_count * impactedWeight,
     swap_component: option.swap_count * swapPenalty,
     curfew_component: curfewViolations * curfewWeight,
+    cancellation_component: cancelledCount * cancellationPenalty,
     risk_penalty: riskPenalty,
   };
   return option;

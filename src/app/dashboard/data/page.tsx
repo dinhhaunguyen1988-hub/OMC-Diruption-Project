@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useData } from "@/components/data-context";
+import { useToast } from "@/components/toast";
 import { cn, formatAirportLocal, formatDateTime } from "@/lib/utils";
 import {
   persistAircraft,
@@ -30,7 +31,7 @@ export default function DataPage() {
   } = useData();
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const toast = useToast();
   const [pasteOpen, setPasteOpen] = useState<
     null | "schedule" | "aircraft" | "disruption"
   >(null);
@@ -46,7 +47,6 @@ export default function DataPage() {
 
   async function handleSaveAll() {
     setSaving(true);
-    setSaveMsg(null);
     try {
       const results: string[] = [];
       if (schedule.length) {
@@ -64,9 +64,11 @@ export default function DataPage() {
         if (!r.ok) throw new Error(`disruption: ${r.message}`);
         results.push("1 disruption");
       }
-      setSaveMsg(`Saved to Supabase: ${results.join(", ")}.`);
+      toast.success("Saved to Supabase", {
+        description: results.join(", "),
+      });
     } catch (e) {
-      setError((e as Error).message);
+      toast.error("Save failed", { description: (e as Error).message });
     } finally {
       setSaving(false);
     }
@@ -135,12 +137,6 @@ export default function DataPage() {
           aircraft from REG column. STD/STA imported as local-station HH:MM and
           converted to UTC using the IANA timezone for the origin/destination
           airport.
-        </div>
-      )}
-
-      {saveMsg && (
-        <div className="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-800">
-          {saveMsg}
         </div>
       )}
 

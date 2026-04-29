@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { useData } from "@/components/data-context";
+import { useToast } from "@/components/toast";
 import {
   runSimulation,
   runMultiEventSimulation,
   type SimulationResult,
 } from "@/lib/engine";
 import type { DisruptionEvent } from "@/lib/types";
-import { cn, formatDateTime } from "@/lib/utils";
+import { formatDateTime } from "@/lib/utils";
 import { approveOption, persistSimulation } from "@/app/actions";
 import {
   draftToEvent,
@@ -36,8 +37,7 @@ export default function SimulatePage() {
   const [savingSim, setSavingSim] = useState(false);
   const [compareIds, setCompareIds] = useState<Set<string>>(new Set());
   const [approvedOptionId, setApprovedOptionId] = useState<string | null>(null);
-  const [actionMsg, setActionMsg] = useState<string | null>(null);
-  const [actionErr, setActionErr] = useState<string | null>(null);
+  const toast = useToast();
 
   const canRun = Boolean(schedule.length && aircraft.length && disruption);
   const canWrite = session?.role === "controller" || session?.role === "admin";
@@ -47,8 +47,6 @@ export default function SimulatePage() {
     setRunning(true);
     setSavedUuid(null);
     setApprovedOptionId(null);
-    setActionMsg(null);
-    setActionErr(null);
     setCompareIds(new Set());
     try {
       const allEvents = [disruption, ...extraEvents];
@@ -93,14 +91,15 @@ export default function SimulatePage() {
   const handleSaveSimulation = async () => {
     if (!result) return;
     setSavingSim(true);
-    setActionErr(null);
     try {
       const r = await persistSimulation(result);
       if (!r.ok) throw new Error(r.message);
       setSavedUuid(r.data?.uuid ?? null);
-      setActionMsg(`Simulation saved (${r.data?.uuid ?? "?"}).`);
+      toast.success("Simulation saved", {
+        description: `uuid: ${r.data?.uuid ?? "?"}`,
+      });
     } catch (e) {
-      setActionErr((e as Error).message);
+      toast.error("Save failed", { description: (e as Error).message });
     } finally {
       setSavingSim(false);
     }
@@ -108,17 +107,16 @@ export default function SimulatePage() {
 
   const handleApprove = async (optionId: string) => {
     if (!savedUuid) {
-      setActionErr("Save the simulation first before approving.");
+      toast.warning("Save the simulation first before approving.");
       return;
     }
-    setActionErr(null);
     const r = await approveOption(savedUuid, optionId);
     if (!r.ok) {
-      setActionErr(r.message ?? "Approve failed");
+      toast.error("Approve failed", { description: r.message ?? undefined });
       return;
     }
     setApprovedOptionId(optionId);
-    setActionMsg(`Option ${optionId} approved.`);
+    toast.success(`Option ${optionId} approved.`);
   };
 
   const toggleCompare = (optionId: string) => {
@@ -219,19 +217,6 @@ export default function SimulatePage() {
 
       {result && (
         <>
-          {(actionMsg || actionErr) && (
-            <div
-              className={cn(
-                "rounded border p-3 text-sm",
-                actionErr
-                  ? "border-[color:var(--danger)] bg-red-50 text-red-800"
-                  : "border-emerald-300 bg-emerald-50 text-emerald-800",
-              )}
-            >
-              {actionErr ?? actionMsg}
-            </div>
-          )}
-
           <ImpactedFlightsPanel
             schedule={schedule}
             aircraft={aircraft}

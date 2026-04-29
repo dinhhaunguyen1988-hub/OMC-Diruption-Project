@@ -8,6 +8,7 @@ import type {
 } from "@/lib/types";
 import {
   addMinutes,
+  effectiveDisruptionEnd,
   minTurnaroundForType,
   minutesBetween,
 } from "./time-utils";
@@ -82,7 +83,9 @@ export function simulateDelayOnly(
       const minTurn = minTurnaroundForType(flight.aircraft_type, rules);
       let requiredStd = flight.std;
       if (impactedIds.has(flight.flight_id)) {
-        const blockEnd = addMinutes(disruption.end_time, minTurn);
+        // Sprint 10 P1: honour reopen_buffer_minutes for AIRPORT_CLOSE / WEATHER.
+        const eventEnd = effectiveDisruptionEnd(disruption, rules);
+        const blockEnd = addMinutes(eventEnd, minTurn);
         if (blockEnd > requiredStd) requiredStd = blockEnd;
       }
       if (previousNewSta) {
@@ -199,7 +202,9 @@ export function simulateDeepDelay(
   const selected = sorted[sorted.length - 1];
   const minTurn = minTurnaroundForType(selected.aircraft_type, rules);
   const targetStd = (() => {
-    const blockEnd = addMinutes(disruption.end_time, minTurn);
+    // Sprint 10 P1: deep-delay must wait past the airport reopen buffer too.
+    const eventEnd = effectiveDisruptionEnd(disruption, rules);
+    const blockEnd = addMinutes(eventEnd, minTurn);
     return blockEnd > selected.std ? blockEnd : selected.std;
   })();
   let delay = Math.max(0, minutesBetween(selected.std, targetStd));

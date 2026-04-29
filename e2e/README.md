@@ -45,12 +45,34 @@ npm run e2e
 
 ## Mapping to UAT plan
 
-| UAT scenario (docs/UAT_PLAN.md) | Spec file | Status |
-|---|---|---|
-| S1 — Controller AOG rapid response | `e2e/s1-aog.spec.ts` (stub) + `e2e/authed/s1-aog-authed.spec.ts` | ✅ stub; ⏳ authed |
-| S2 — Multi-event with curfew | (todo, Sprint 9 follow-up) | ⏳ |
-| S3 — Compare 2 options | `e2e/s3-compare.spec.ts` | ✅ |
-| S4 — Supervisor audit | (auth-gated, todo) | ⏳ |
-| S5 — Viewer least-privilege | (auth-gated, todo) | ⏳ |
-| S6 — CSV upload error handling | (todo) | ⏳ |
-| S7 — Timezone display sanity | (todo) | ⏳ |
+| UAT scenario (docs/UAT_PLAN.md) | Spec file(s) | Stub CI | Authed |
+|---|---|---|---|
+| S1 — Controller AOG rapid response | `e2e/s1-aog.spec.ts`, `e2e/authed/s1-aog-authed.spec.ts` | ✅ | ✅ skip-by-default |
+| S2 — Multi-event recovery (K10) | `e2e/s2-multi-event.spec.ts`, `e2e/authed/s2-multi-event-authed.spec.ts` | ✅ | ✅ skip-by-default |
+| S3 — Compare 2 options | `e2e/s3-compare.spec.ts` | ✅ | n/a |
+| S4 — Supervisor audit | `e2e/authed/s4-supervisor.spec.ts` | n/a (requires real audit data) | ✅ skip-by-default |
+| S5 — Viewer least-privilege | `e2e/authed/s5-viewer.spec.ts` | partly via S1#4 (no-session) | ✅ skip-by-default |
+| S6 — CSV upload error handling | `e2e/s6-broken-csv.spec.ts` | ✅ | n/a |
+| S7 — Timezone display sanity | `e2e/s7-timezone.spec.ts` | ✅ | n/a |
+
+### Curfew note
+
+The default rules YAML configures curfews only for PQC/VCL/VCS, while the
+sample schedules route between SGN/HAN/DAD. So the curfew badge never lights
+up against bundled samples. Curfew correctness is covered by unit tests in
+`src/lib/engine/__tests__/time-utils.test.ts`. To exercise the badge end-to-end,
+provide a custom rules YAML that includes a curfew at one of the sample
+airports (e.g. add SGN 22:00–05:00) and a disruption that pushes a movement
+into that window — left as a Sprint 9 polish follow-up.
+
+### Auth env vars
+
+For `e2e/authed/*` specs, set the role-specific creds in addition to
+`NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` and
+`E2E_SUPABASE=1`:
+
+| Spec | Env vars |
+|---|---|
+| `s1-aog-authed`, `s2-multi-event-authed` | `E2E_CONTROLLER_EMAIL`, `E2E_CONTROLLER_PASSWORD` |
+| `s4-supervisor` | `E2E_SUPERVISOR_EMAIL`, `E2E_SUPERVISOR_PASSWORD` |
+| `s5-viewer` | `E2E_VIEWER_EMAIL`, `E2E_VIEWER_PASSWORD` |

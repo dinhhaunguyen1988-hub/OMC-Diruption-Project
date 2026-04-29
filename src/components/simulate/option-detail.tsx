@@ -62,6 +62,7 @@ export function OptionDetail({
             <table className="w-full text-xs font-mono">
               <thead className="text-left text-zinc-500 border-b border-border">
                 <tr>
+                  <th className="py-1 pr-3">Status</th>
                   <th className="py-1 pr-3">Flight</th>
                   <th className="py-1 pr-3">From → To</th>
                   <th className="py-1 pr-3">Old aircraft</th>
@@ -72,38 +73,82 @@ export function OptionDetail({
                 </tr>
               </thead>
               <tbody>
-                {option.flight_changes.map((c) => (
-                  <tr
-                    key={c.flight_id}
-                    className="border-b border-border/50 last:border-b-0"
-                  >
-                    <td className="py-1 pr-3">{c.flight_number}</td>
-                    <td className="py-1 pr-3">{c.flight_id}</td>
-                    <td className="py-1 pr-3">{c.original_aircraft}</td>
-                    <td className="py-1 pr-3">
-                      {c.new_aircraft !== c.original_aircraft ? (
-                        <span className="text-emerald-700 font-bold">
-                          {c.new_aircraft}
-                        </span>
-                      ) : (
-                        c.new_aircraft
-                      )}
-                    </td>
-                    <td className="py-1 pr-3">
-                      {formatDateTime(c.original_std)}
-                    </td>
-                    <td className="py-1 pr-3">{formatDateTime(c.new_std)}</td>
-                    <td className="py-1 pr-3">
-                      {c.delay_minutes > 0 ? (
-                        <span className="text-amber-700 font-bold">
-                          +{c.delay_minutes}′
-                        </span>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {option.flight_changes.map((c) => {
+                  const cancelled = c.status === "CANCELLED";
+                  const ferry = c.status === "FERRY";
+                  return (
+                    <tr
+                      key={c.flight_id}
+                      className={`border-b border-border/50 last:border-b-0 ${
+                        cancelled ? "bg-red-50 dark:bg-red-900/10" : ""
+                      } ${ferry ? "bg-amber-50 dark:bg-amber-900/10" : ""}`}
+                    >
+                      <td className="py-1 pr-3">
+                        {cancelled && (
+                          <span
+                            data-testid="status-badge-cancelled"
+                            className="inline-block px-2 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-semibold tracking-wide"
+                          >
+                            CANCELLED
+                          </span>
+                        )}
+                        {ferry && (
+                          <span
+                            data-testid="status-badge-ferry"
+                            className="inline-block px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-semibold tracking-wide"
+                            title="Empty positioning leg"
+                          >
+                            FERRY
+                          </span>
+                        )}
+                        {!cancelled && !ferry && (
+                          <span className="text-zinc-400">—</span>
+                        )}
+                      </td>
+                      <td
+                        className={`py-1 pr-3 ${
+                          cancelled ? "line-through text-zinc-500" : ""
+                        }`}
+                      >
+                        {c.flight_number}
+                      </td>
+                      <td className="py-1 pr-3">{c.flight_id}</td>
+                      <td className="py-1 pr-3">{c.original_aircraft}</td>
+                      <td className="py-1 pr-3">
+                        {cancelled ? (
+                          <span className="text-zinc-400">—</span>
+                        ) : c.new_aircraft !== c.original_aircraft ? (
+                          <span className="text-emerald-700 font-bold">
+                            {c.new_aircraft}
+                          </span>
+                        ) : (
+                          c.new_aircraft
+                        )}
+                      </td>
+                      <td className="py-1 pr-3">
+                        {formatDateTime(c.original_std)}
+                      </td>
+                      <td className="py-1 pr-3">
+                        {cancelled ? (
+                          <span className="text-zinc-400">—</span>
+                        ) : (
+                          formatDateTime(c.new_std)
+                        )}
+                      </td>
+                      <td className="py-1 pr-3">
+                        {cancelled ? (
+                          <span className="text-zinc-400">—</span>
+                        ) : c.delay_minutes > 0 ? (
+                          <span className="text-amber-700 font-bold">
+                            +{c.delay_minutes}′
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -4,7 +4,7 @@ import type {
   ImpactedFlight,
   OccRules,
 } from "@/lib/types";
-import { overlaps } from "./time-utils";
+import { effectiveDisruptionEnd, overlaps } from "./time-utils";
 
 function sortByAircraftRotation(
   schedule: FlightLeg[],
@@ -35,16 +35,14 @@ function sortByAircraftRotation(
 export function findImpactedFlights(
   disruption: DisruptionEvent,
   schedule: FlightLeg[],
-  _rules?: OccRules,
+  rules?: OccRules,
 ): ImpactedFlight[] {
-  // Rules reserved for future curfew/closure-aware impact detection.
-  void _rules;
   switch (disruption.event_type) {
     case "AOG":
       return findAogImpacts(disruption, schedule);
     case "AIRPORT_CLOSE":
     case "WEATHER":
-      return findAirportImpacts(disruption, schedule);
+      return findAirportImpacts(disruption, schedule, rules);
     case "LATE_ARRIVAL":
       return findLateArrivalImpacts(disruption, schedule);
     default:
@@ -92,11 +90,20 @@ function findAogImpacts(
 function findAirportImpacts(
   disruption: DisruptionEvent,
   schedule: FlightLeg[],
+  rules?: OccRules,
 ): ImpactedFlight[] {
   if (!disruption.affected_airport) return [];
   const airport = disruption.affected_airport;
   const eventLabel =
     disruption.event_type === "WEATHER" ? "Weather risk" : "Airport closure";
+  // Sprint 10 P1: extend the effective closure window by reopen_buffer_minutes
+  // when configured. Reverts to disruption.end_time when buffer is disabled
+  // or rules are absent (e.g. legacy callers without rules).
+  const effectiveEnd = rules
+    ? effectiveDisruptionEnd(disruption, rules)
+    : disruption.end_time;
+  const buffered =
+    effectiveEnd.getTime() !== disruption.end_time.getTime();
   const impacted: ImpactedFlight[] = [];
   const sorted = [...schedule].sort(
     (a, b) => a.std.getTime() - b.std.getTime(),
@@ -105,11 +112,11 @@ function findAirportImpacts(
     const departureBlocked =
       flight.origin === airport &&
       flight.std >= disruption.start_time &&
-      flight.std < disruption.end_time;
+      flight.std < effectiveEnd;
     const arrivalBlocked =
       flight.destination === airport &&
       flight.sta >= disruption.start_time &&
-      flight.sta < disruption.end_time;
+      flight.sta < effectiveEnd;
     if (departureBlocked || arrivalBlocked) {
       const reasons = [
         `${eventLabel} at ${airport} from ${disruption.start_time.toISOString()} to ${disruption.end_time.toISOString()}`,
@@ -118,6 +125,15 @@ function findAirportImpacts(
         reasons.push(`Departure from ${airport} falls within affected window`);
       if (arrivalBlocked)
         reasons.push(`Arrival into ${airport} falls within affected window`);
+      const inBuffer =
+        buffered &&
+        ((departureBlocked && flight.std >= disruption.end_time) ||
+          (arrivalBlocked && flight.sta >= disruption.end_time));
+      if (inBuffer) {
+        reasons.push(
+          `Within reopen buffer (${airport} reopens at ${disruption.end_time.toISOString()}, buffer extends until ${effectiveEnd.toISOString()})`,
+        );
+      }
       impacted.push({ flight, reason_codes: reasons });
     }
   }

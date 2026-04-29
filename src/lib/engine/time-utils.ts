@@ -1,4 +1,4 @@
-import type { OccRules } from "@/lib/types";
+import type { DisruptionEvent, OccRules } from "@/lib/types";
 
 export function overlaps(
   startA: Date,
@@ -30,6 +30,41 @@ export function minTurnaroundForType(
     by_aircraft_type: {},
   };
   return turn.by_aircraft_type?.[aircraftType] ?? turn.default_minutes ?? 40;
+}
+
+/**
+ * Sprint 10 P1: airport reopen buffer.
+ *
+ * For AIRPORT_CLOSE / WEATHER events, after the listed `end_time` the airport
+ * needs an operational reset window before flights can use it again — runway
+ * inspection, ATC ramp-up, ground service availability. The configured
+ * `airport_rules.reopen_buffer_minutes` extends the effective closure window
+ * for impact detection and delay simulation purposes.
+ *
+ * Buffer is only applied when:
+ *   - event_type is AIRPORT_CLOSE or WEATHER
+ *   - rules.airport_rules.enforce_closure_window is true
+ *   - reopen_buffer_minutes > 0
+ *
+ * For AOG and LATE_ARRIVAL the buffer does not apply (the constraint is on
+ * the aircraft, not the airport infrastructure).
+ */
+export function effectiveDisruptionEnd(
+  disruption: DisruptionEvent,
+  rules: OccRules,
+): Date {
+  const isAirportEvent =
+    disruption.event_type === "AIRPORT_CLOSE" ||
+    disruption.event_type === "WEATHER";
+  if (!isAirportEvent) return disruption.end_time;
+
+  const ar = rules.airport_rules;
+  if (!ar?.enforce_closure_window) return disruption.end_time;
+
+  const buffer = ar.reopen_buffer_minutes ?? 0;
+  if (buffer <= 0) return disruption.end_time;
+
+  return addMinutes(disruption.end_time, buffer);
 }
 
 // =============================================================================

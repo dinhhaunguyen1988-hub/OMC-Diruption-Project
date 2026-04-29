@@ -71,6 +71,34 @@ export function OptionRow({
               CURFEW ×{option.curfew_violations}
             </span>
           )}
+          {(() => {
+            const cancelCount = option.flight_changes.filter(
+              (c) => c.status === "CANCELLED",
+            ).length;
+            const ferryCount = option.flight_changes.filter(
+              (c) => c.status === "FERRY",
+            ).length;
+            return (
+              <>
+                {cancelCount > 0 && (
+                  <span
+                    title={`${cancelCount} flight(s) cancelled`}
+                    className="ml-2 inline-block px-2 py-0.5 rounded text-[11px] font-mono bg-red-600 text-white"
+                  >
+                    CANCEL ×{cancelCount}
+                  </span>
+                )}
+                {ferryCount > 0 && (
+                  <span
+                    title="Includes ferry (empty positioning) leg"
+                    className="ml-2 inline-block px-2 py-0.5 rounded text-[11px] font-mono bg-amber-500 text-white"
+                  >
+                    FERRY ×{ferryCount}
+                  </span>
+                )}
+              </>
+            );
+          })()}
           <div className="mt-1 text-[11px] font-mono text-zinc-500">
             {option.option_id}
           </div>
